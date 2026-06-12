@@ -16,6 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 import uvicorn
 
 from app.api.routes import admin, auth as flashcard_auth, cards, decks, settings as user_settings, stats, study, users
@@ -41,21 +42,25 @@ _is_ready = False
 
 
 def seed_admin():
+    """Tạo admin nếu chưa có. An toàn khi nhiều worker chạy cùng lúc."""
     db = SessionLocal()
     try:
-        admin_user = db.query(User).filter(User.username == "admin").first()
-        if not admin_user:
-            admin_user = User(
-                username="admin",
-                email="admin@flashcard.local",
-                password_hash=get_password_hash("admin1234"),
-                display_name="Administrator",
-                role=UserRole.admin,
-            )
-            db.add(admin_user)
+        if db.query(User).filter(User.username == "admin").first():
+            return
+        admin_user = User(
+            username="admin",
+            email="admin@flashcard.local",
+            password_hash=get_password_hash("admin1234"),
+            display_name="Administrator",
+            role=UserRole.admin,
+        )
+        db.add(admin_user)
+        try:
             db.commit()
             db.refresh(admin_user)
             create_user_settings(db, admin_user.id)
+        except IntegrityError:
+            db.rollback()
     finally:
         db.close()
 
