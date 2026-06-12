@@ -8,6 +8,7 @@ Mục tiêu: Tránh bill bất ngờ từ LLM API.
 
 Trong production: lưu trong Redis/DB, không phải in-memory.
 """
+import os
 import time
 import logging
 from dataclasses import dataclass, field
@@ -126,3 +127,29 @@ class CostGuard:
 
 # Singleton
 cost_guard = CostGuard(daily_budget_usd=1.0, global_daily_budget_usd=10.0)
+
+
+# ── Exercise 4.4: Redis-backed monthly budget ──────────────────
+def check_budget(user_id: str, estimated_cost: float, monthly_budget_usd: float = 10.0) -> bool:
+    """
+    Return True nếu còn budget, False nếu vượt.
+    Track spending trong Redis, reset đầu tháng.
+    """
+    try:
+        import redis
+        from datetime import datetime
+
+        r = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+        month_key = datetime.now().strftime("%Y-%m")
+        key = f"budget:{user_id}:{month_key}"
+
+        current = float(r.get(key) or 0)
+        if current + estimated_cost > monthly_budget_usd:
+            return False
+
+        r.incrbyfloat(key, estimated_cost)
+        r.expire(key, 32 * 24 * 3600)
+        return True
+    except Exception as exc:
+        logger.warning(f"Redis budget check failed, allowing request: {exc}")
+        return True
