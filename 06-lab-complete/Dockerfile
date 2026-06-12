@@ -17,7 +17,7 @@ WORKDIR /app
 COPY --from=builder /root/.local /app/.local
 COPY app/ ./app/
 COPY utils/ ./utils/
-RUN chown -R agent:agent /app
+RUN mkdir -p /app/data && chown -R agent:agent /app
 
 USER agent
 ENV PATH=/app/.local/bin:$PATH

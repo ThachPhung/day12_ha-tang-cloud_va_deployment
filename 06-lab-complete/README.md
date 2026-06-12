@@ -1,4 +1,18 @@
-# Lab 12 — Part 6: Production AI Agent
+# Part 6 — English Flashcard API (Production)
+
+Kết hợp **English Flashcard** + yêu cầu **Day 12** (Docker, Redis, auth, rate limit, health checks).
+
+## Tính năng
+
+**Flashcard API** (`/api/*`):
+- Đăng nhập JWT: `POST /api/auth/login`
+- Bộ từ, thẻ, học SRS: `/api/decks`, `/api/study`, ...
+- Admin mặc định: `admin` / `admin1234`
+
+**Day 12 production**:
+- `GET /health`, `GET /ready`
+- `POST /ask` — AI English tutor (mock LLM, cần `X-API-Key`)
+- Rate limit + cost guard (Redis)
 
 ## Chạy local
 
@@ -7,14 +21,18 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Test:
+- API: http://localhost:8080
+- Docs: http://localhost:8080/docs
 
 ```bash
 curl http://localhost:8080/health
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin1234"}'
 curl -X POST http://localhost:8080/ask \
   -H "X-API-Key: dev-key-change-me-in-production" \
   -H "Content-Type: application/json" \
-  -d '{"user_id":"test","question":"What is deployment?"}'
+  -d '{"user_id":"test","question":"How to learn vocabulary?"}'
 ```
 
 ## Kiểm tra
@@ -23,23 +41,6 @@ curl -X POST http://localhost:8080/ask \
 python3 check_production_ready.py
 ```
 
-## Deploy (bạn tự làm)
+## Deploy Render
 
-### Railway
-
-```bash
-npm i -g @railway/cli
-railway login
-railway init
-railway add redis
-railway variables set AGENT_API_KEY=your-secret-key
-railway variables set ENVIRONMENT=production
-railway up
-railway domain
-```
-
-### Render
-
-Push GitHub → Render Dashboard → New Blueprint → connect repo → set secrets → Deploy.
-
-Điền URL vào `DEPLOYMENT.md` sau khi deploy xong.
+Xem `render.yaml`. Cần set `DATABASE_URL` (Supabase/Postgres) trên Dashboard.

@@ -1,11 +1,8 @@
-# Render Blueprint — deploy từ folder 06-lab-complete
-# Dashboard: New → Blueprint → connect GitHub repo
-# Đặt Root Directory = 06-lab-complete (nếu repo là monorepo)
-
 services:
   - type: web
-    name: ai-agent-production
+    name: english-flashcard-api
     runtime: docker
+    dockerfilePath: ./Dockerfile
     region: singapore
     plan: free
     healthCheckPath: /health
@@ -19,11 +16,17 @@ services:
         value: "10.0"
       - key: AGENT_API_KEY
         generateValue: true
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
       - key: REDIS_URL
         fromService:
           name: agent-cache
           type: redis
           property: connectionString
+      - key: CORS_ORIGINS
+        value: "*"
 
   - type: redis
     name: agent-cache
