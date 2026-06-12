@@ -211,8 +211,43 @@ python3 test_stateless.py
 
 ---
 
-## Part 6: Final Project
+## Part 6: Final Project — English Flashcard API
 
-**→ Bạn tự implement trong `06-lab-complete/`**
+### Mô tả
 
-Xem `CODE_LAB.md` Part 6 và `06-lab-complete/README.md`.
+Tích hợp **English Flashcard** vào `06-lab-complete/` kết hợp yêu cầu Day 12:
+- Docker multi-stage, Redis, API Key auth, rate limit, cost guard
+- Health `/health`, readiness `/ready`, graceful shutdown, JSON logging
+- Flashcard API (`/api/*`) + AI tutor `POST /ask` (mock LLM)
+
+### Deploy
+
+- **Platform:** Render
+- **URL:** https://day12-ha-tang-cloud-va-deployment-up31.onrender.com
+- **Root Directory:** `06-lab-complete`
+- **Demo mode:** `DEMO_MODE=true` (không dùng Postgres tạm thời)
+
+### Test kết quả (cloud)
+
+```bash
+curl https://day12-ha-tang-cloud-va-deployment-up31.onrender.com/health
+# → status: ok, redis: ok, database: skipped, demo_mode: true
+
+curl https://day12-ha-tang-cloud-va-deployment-up31.onrender.com/ready
+# → ready: true, redis: true
+
+curl -X POST https://day12-ha-tang-cloud-va-deployment-up31.onrender.com/ask \
+  -H "X-API-Key: YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"user_id":"test","question":"Hello"}'
+# → 200 + answer JSON
+```
+
+### Production readiness
+
+```bash
+cd 06-lab-complete && python3 check_production_ready.py
+# → 20/20 checks passed
+```
+
+Chi tiết deploy: xem `DEPLOYMENT.md`.

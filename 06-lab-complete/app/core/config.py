@@ -24,8 +24,9 @@ class Settings(BaseSettings):
     APP_NAME: str = "English Flashcard API"
     APP_VERSION: str = "1.0.0"
 
-    # Flashcard database
+    # Flashcard database (để trống hoặc DEMO_MODE=true = bỏ qua Postgres)
     DATABASE_URL: str = f"sqlite:///{DEFAULT_DB_PATH}"
+    DEMO_MODE: bool = False
     SECRET_KEY: str = "dev-secret-key-change-in-production"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
     ALGORITHM: str = "HS256"
@@ -76,9 +77,18 @@ class Settings(BaseSettings):
     def redis_url(self) -> str:
         return self.REDIS_URL
 
+    @property
+    def demo_mode(self) -> bool:
+        if self.DEMO_MODE:
+            return True
+        url = (self.DATABASE_URL or "").strip().lower()
+        return url in ("", "skip", "none", "disabled")
+
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def normalize_database_url(cls, value: str) -> str:
+        if str(value).strip().lower() in ("", "skip", "none", "disabled"):
+            return f"sqlite:///{DEFAULT_DB_PATH}"
         return _normalize_database_url(value)
 
     class Config:

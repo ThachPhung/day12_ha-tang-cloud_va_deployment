@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 
 START_TIME = time.time()
 _is_ready = False
+_db_available = False
 
 
 def seed_admin():
@@ -65,6 +66,27 @@ def seed_admin():
         db.close()
 
 
+def _init_database() -> bool:
+    """Khởi tạo DB flashcard. Trả False nếu lỗi (demo mode vẫn chạy được)."""
+    global _db_available
+    if settings.demo_mode:
+        logger.warning(json.dumps({"event": "demo_mode", "database": "skipped"}))
+        _db_available = False
+        return False
+    try:
+        Base.metadata.create_all(bind=engine)
+        seed_admin()
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+        _db_available = True
+        return True
+    except Exception as exc:
+        logger.warning(json.dumps({"event": "database_init_failed", "error": str(exc)}))
+        _db_available = False
+        return False
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _is_ready
@@ -73,16 +95,16 @@ async def lifespan(app: FastAPI):
         "app": settings.app_name,
         "version": settings.app_version,
         "environment": settings.environment,
+        "demo_mode": settings.demo_mode,
     }))
     if settings.environment == "production" and settings.AGENT_API_KEY == "dev-key-change-me":
         raise RuntimeError("AGENT_API_KEY must be set in production!")
     if not ping_redis():
         raise RuntimeError("Cannot connect to Redis")
 
-    Base.metadata.create_all(bind=engine)
-    seed_admin()
+    _init_database()
     _is_ready = True
-    logger.info(json.dumps({"event": "ready"}))
+    logger.info(json.dumps({"event": "ready", "database": _db_available}))
     yield
     _is_ready = False
     logger.info(json.dumps({"event": "shutdown"}))
@@ -150,8 +172,10 @@ def root():
     return {
         "app": settings.app_name,
         "version": settings.app_version,
+        "demo_mode": settings.demo_mode,
+        "database": "ok" if _db_available else "skipped",
         "docs": "/docs",
-        "flashcard_api": "/api",
+        "flashcard_api": "/api" if _db_available else "unavailable (demo mode)",
         "health": "/health",
         "ready": "/ready",
         "ask": "POST /ask (X-API-Key)",
@@ -177,19 +201,25 @@ async def ask_english_tutor(body: AskRequest, _key: str = Depends(verify_api_key
 
 @app.get("/health")
 def health():
-    db_ok = False
-    try:
-        db = SessionLocal()
-        db.execute(text("SELECT 1"))
-        db.close()
-        db_ok = True
-    except Exception:
-        pass
+    redis_ok = ping_redis()
+    db_status = "ok" if _db_available else ("skipped" if settings.demo_mode else "error")
+    if not _db_available and not settings.demo_mode:
+        try:
+            db = SessionLocal()
+            db.execute(text("SELECT 1"))
+            db.close()
+            db_status = "ok"
+        except Exception:
+            db_status = "error"
+    status = "ok" if redis_ok else "degraded"
+    if not settings.demo_mode and db_status == "error":
+        status = "degraded"
     return {
-        "status": "ok" if db_ok and ping_redis() else "degraded",
+        "status": status,
         "version": settings.app_version,
-        "database": "ok" if db_ok else "error",
-        "redis": "ok" if ping_redis() else "error",
+        "demo_mode": settings.demo_mode,
+        "database": db_status,
+        "redis": "ok" if redis_ok else "error",
         "uptime_seconds": round(time.time() - START_TIME, 1),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
@@ -199,13 +229,12 @@ def health():
 def ready():
     if not _is_ready or not ping_redis():
         raise HTTPException(503, "Not ready")
-    try:
-        db = SessionLocal()
-        db.execute(text("SELECT 1"))
-        db.close()
-    except Exception:
-        raise HTTPException(503, "Database not ready")
-    return {"ready": True, "redis": True, "database": True}
+    return {
+        "ready": True,
+        "redis": True,
+        "database": _db_available,
+        "demo_mode": settings.demo_mode,
+    }
 
 
 @app.get("/api/health")
